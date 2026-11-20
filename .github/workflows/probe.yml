@@ -1,4 +1,4 @@
-name: probe-py
+name: probe-list
 
 on:
   workflow_dispatch:
@@ -8,42 +8,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: python urllib vs curl 对照
+      - uses: actions/checkout@v4
+      - name: 直接调用 fetch_data.list_get
         run: |
+          cd backtest
           python3 - <<'PY'
-          import json, socket, urllib.request
-
-          print("IPv4:", [r[4][0] for r in socket.getaddrinfo("push2delay.eastmoney.com", 443, socket.AF_INET)][:2])
-
-          LIST = ("https://push2delay.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2"
-                  "&fid=f12&po=0&fs=m:1+t:2,m:0+t:6&fields=f12,f13,f14,f26,f20,f100")
-          KL = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.600000&klt=101&fqt=2"
-                "&beg=20250101&end=20251120&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57")
-          UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
-
-          def t(name, url, hdrs):
-              req = urllib.request.Request(url, headers=hdrs)
-              try:
-                  r = urllib.request.urlopen(req, timeout=20)
-                  body = r.read()
-                  print(f"{name:28s} OK  {r.status}  {len(body)}B  {body[:70]!r}")
-              except Exception as e:
-                  print(f"{name:28s} ERR {type(e).__name__} {e}")
-
-          t("clist UA only", LIST, {"User-Agent": UA})
-          t("clist UA+Referer", LIST, {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"})
-          t("clist full browser", LIST, {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/",
-                                         "Accept": "application/json, text/plain, */*",
-                                         "Accept-Language": "zh-CN,zh;q=0.9",
-                                         "Connection": "keep-alive"})
-          t("clist curl UA", LIST, {"User-Agent": "curl/8.5.0", "Accept": "*/*"})
-          t("clist no UA", LIST, {})
-          t("kline UA only", KL, {"User-Agent": UA})
-          t("kline curl UA", KL, {"User-Agent": "curl/8.5.0", "Accept": "*/*"})
-          t("push2 delay via http", LIST.replace("https://", "http://"), {"User-Agent": UA})
+          import urllib.request
+          import fetch_data as f
+          print("hosts:", f.LIST_HOSTS, "current:", f._list_host)
+          for pz in (5, 100):
+              path = f.LIST_PATH.replace("pz=100", "pz=%d" % pz)
+              for host in f.LIST_HOSTS:
+                  url = host + path.format(pn=1)
+                  try:
+                      r = urllib.request.urlopen(urllib.request.Request(
+                          url, headers={"User-Agent": f.UA, "Referer": "https://quote.eastmoney.com/"}),
+                          timeout=20)
+                      print("pz=%d %s -> %s %s %dB" % (pz, host, r.status, r.geturl(), len(r.read())))
+                  except Exception as e:
+                      print("pz=%d %s -> ERR %s %s" % (pz, host, type(e).__name__, e))
+          try:
+              d = f.list_get(1)
+              print("list_get OK total", d["data"]["total"], "rows", len(d["data"]["diff"]))
+          except Exception as e:
+              print("list_get ERR", type(e).__name__, e)
+          try:
+              uni = f.fetch_universe()
+              print("universe OK", len(uni), uni[0])
+          except Exception as e:
+              print("universe ERR", type(e).__name__, e)
           PY
-          echo "== curl 对照（同机）"
-          curl -s -o /tmp/c.json -w "curl clist: %{http_code} %{size_download}B\n" --max-time 20 \
-            -A 'Mozilla/5.0' -H 'Referer: https://quote.eastmoney.com/' \
-            "https://push2delay.eastmoney.com/api/qt/clist/get?pn=1&pz=5&po=1&np=1&fltt=2&invt=2&fid=f12&po=0&fs=m:1+t:2,m:0+t:6&fields=f12,f13,f14,f26,f20,f100"
-          head -c 120 /tmp/c.json; echo
