@@ -12,6 +12,7 @@
 """
 import argparse
 import json
+import os
 import sys
 import sqlite3
 from bisect import bisect_left, bisect_right
@@ -536,10 +537,16 @@ def main():
 
     # 板块真实主力净流入（只有近 120 日），能对上名字的行业优先用真实值
     print("[flow] 抓板块真实主力净流入", flush=True)
+    if os.environ.get("SKIP_REAL_FLOW"):
+        real_flow = {}
+        print("[flow] SKIP_REAL_FLOW=1，跳过真实主力净流入，使用代理口径", flush=True)
+        try_flow = False
+    else:
+        try_flow = True
     try:
         from board_flow import load_real_flow, norm
         inds = sorted({v["industry"] for v in stocks.values() if v["industry"]})
-        raw_flow = load_real_flow(inds)
+        raw_flow = load_real_flow(inds) if try_flow else {}
         real_flow = {name: raw_flow[norm(name)] for name in ind_series
                      if norm(name) in raw_flow}
         print(f"[flow] 真实覆盖 {len(real_flow)}/{len(ind_series)} 个板块", flush=True)

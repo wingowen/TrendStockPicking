@@ -21,8 +21,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DB = ROOT / "market.db"
 
-LIST_URL = ("https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2"
-            "&fid=f12&po=0&fs=m:1+t:2,m:0+t:6&fields=f12,f13,f14,f26,f20,f100")
+LIST_HOSTS = ("https://push2.eastmoney.com", "https://push2delay.eastmoney.com")
+LIST_PATH = ("/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2"
+             "&fid=f12&po=0&fs=m:1+t:2,m:0+t:6&fields=f12,f13,f14,f26,f20,f100")
 KLINE_URL = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&klt=101&fqt={fqt}"
              "&beg={beg}&end={end}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57")
 
@@ -34,13 +35,32 @@ END = datetime.now().strftime("%Y%m%d")
 def get(url, timeout=20, retries=3):
     for i in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            req = urllib.request.Request(url, headers={"User-Agent": UA,
+                                                      "Referer": "https://quote.eastmoney.com/"})
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode())
         except Exception:  # noqa: BLE001
             if i == retries:
                 raise
             time.sleep(0.4 * (i + 1))
+
+
+_list_host = [LIST_HOSTS[0]]
+
+
+def list_get(pn):
+    hosts = [_list_host[0]] + [h for h in LIST_HOSTS if h != _list_host[0]]
+    last = None
+    for h in hosts:
+        try:
+            d = get(h + LIST_PATH.format(pn=pn))
+            if d.get("data") and d["data"].get("diff"):
+                _list_host[0] = h
+                return d
+            last = RuntimeError(f"{h} 返回空 data")
+        except Exception as e:  # noqa: BLE001
+            last = e
+    raise last
 
 
 def ensure_schema(con):
@@ -58,7 +78,7 @@ def ensure_schema(con):
 def fetch_industries(con):
     rows, total, pn = [], None, 1
     while total is None or len(rows) < total:
-        d = get(LIST_URL.format(pn=pn))
+        d = list_get(pn)
         p = d["data"]
         total = p["total"]
         rows.extend(p["diff"])

@@ -22,8 +22,9 @@ DB = ROOT / "market.db"
 START = "20180101"
 END = datetime.now().strftime("%Y%m%d")
 
-LIST_URL = ("https://push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2"
-            "&fid=f12&po=0&fs=m:1+t:2,m:0+t:6&fields=f12,f13,f14,f26,f20")
+LIST_HOSTS = ("https://push2.eastmoney.com", "https://push2delay.eastmoney.com")
+LIST_PATH = ("/api/qt/clist/get?pn={pn}&pz=100&po=1&np=1&fltt=2&invt=2"
+             "&fid=f12&po=0&fs=m:1+t:2,m:0+t:6&fields=f12,f13,f14,f26,f20")
 KLINE_URL = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={secid}&klt=101&fqt={fqt}"
              "&beg={beg}&end={end}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57")
 
@@ -36,7 +37,8 @@ UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/
 def get(url, timeout=20, retries=3):
     for i in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            req = urllib.request.Request(url, headers={"User-Agent": UA,
+                                                      "Referer": "https://quote.eastmoney.com/"})
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode())
         except Exception as e:  # noqa: BLE001
@@ -45,10 +47,29 @@ def get(url, timeout=20, retries=3):
             time.sleep(0.4 * (i + 1))
 
 
+_list_host = [LIST_HOSTS[0]]
+
+
+def list_get(pn):
+    """列表接口：优先实时域名，失败自动退到 push2delay（海外 IP 常见 302/502）。"""
+    hosts = [_list_host[0]] + [h for h in LIST_HOSTS if h != _list_host[0]]
+    last = None
+    for h in hosts:
+        try:
+            d = get(h + LIST_PATH.format(pn=pn))
+            if d.get("data") and d["data"].get("diff"):
+                _list_host[0] = h
+                return d
+            last = RuntimeError(f"{h} 返回空 data")
+        except Exception as e:  # noqa: BLE001
+            last = e
+    raise last
+
+
 def fetch_universe():
     rows, total, pn = [], None, 1
     while total is None or len(rows) < total:
-        d = get(LIST_URL.format(pn=pn))
+        d = list_get(pn)
         payload = d["data"]
         total = payload["total"]
         rows.extend(payload["diff"])

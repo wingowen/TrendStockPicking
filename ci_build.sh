@@ -10,6 +10,10 @@ export TZ="${TZ:-Asia/Shanghai}"
 
 PY="${PYTHON:-python3}"
 
+# 板块主力净流入走 push2 的 fflow 接口，海外 IP 拿不到（返回空），
+# 强行抓会逐个板块超时。CI 里直接用代理口径，面板板块评分与本地略有差异。
+export SKIP_REAL_FLOW=1
+
 echo "[1/4] 全量抓日线（后复权）"
 (cd backtest && "$PY" -u fetch_data.py --force)
 
