@@ -1,0 +1,51 @@
+name: deploy-panel
+
+# 数据由 WSL 定时任务构建后 force-push 到 data 分支触发这里；
+# 本 workflow 只做静态站打包与 Pages 部署，不抓数据（海外 IP 抓不到东财）。
+on:
+  push:
+    branches: [data]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 取 data 分支的最新数据
+        run: |
+          set -e
+          git fetch origin data --depth=1
+          git checkout origin/data -- breakout-data.js
+          git checkout origin/data -- breakout-data
+          git checkout origin/data -- backtest/equity_data.js
+          echo "快照 $(ls breakout-data | wc -l | tr -d ' ') 份，数据 $(du -h breakout-data.js | cut -f1)"
+
+      - name: 打包静态站点
+        run: |
+          set -e
+          mkdir -p site/backtest
+          cp breakout-panel.html rules.html echarts.min.js breakout-data.js site/
+          cp -r breakout-data site/
+          cp backtest/equity_data.js site/backtest/
+          du -sh site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
