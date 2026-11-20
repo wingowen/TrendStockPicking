@@ -27,14 +27,13 @@ jobs:
                       print("pz=%d %s -> %s %s %dB" % (pz, host, r.status, r.geturl(), len(r.read())))
                   except Exception as e:
                       print("pz=%d %s -> ERR %s %s" % (pz, host, type(e).__name__, e))
-          try:
-              d = f.list_get(1)
-              print("list_get OK total", d["data"]["total"], "rows", len(d["data"]["diff"]))
-          except Exception as e:
-              print("list_get ERR", type(e).__name__, e)
-          try:
-              uni = f.fetch_universe()
-              print("universe OK", len(uni), uni[0])
-          except Exception as e:
-              print("universe ERR", type(e).__name__, e)
+          import time
+          for pn in range(1, 40):
+              try:
+                  d = f.list_get(pn)
+                  print("pn=%d total=%d rows=%d" % (pn, d["data"]["total"], len(d["data"]["diff"])))
+              except Exception as e:
+                  print("pn=%d ERR %s %s" % (pn, type(e).__name__, e))
+                  break
+              time.sleep(0.5)
           PY
