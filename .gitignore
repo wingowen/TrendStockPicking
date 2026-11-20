@@ -1,0 +1,43 @@
+# 本地运行产物：CI 每次从零重建，不进仓库
+backtest/market.db
+backtest/market.db-journal
+breakout-data/
+breakout-data.js
+backtest/equity_data.js
+panel_server.log
+*.log
+
+# 隔离环境
+.venv-bt/
+.venv/
+__pycache__/
+*.pyc
+
+# 早期弃用产物
+cache/
+build_breakout_panel.py
+generate_workflow_data.py
+workflow-data.js
+workflow.html
+WENCAI_DATA_WORKFLOW.md
+WENCAI_SKILLS.md
+A股板块选股-个股池-20261120.html
+a股热门板块-20261120.html
+_hub_page*.json
+
+# macOS
+.DS_Store
+
+# 回测中间报告（结果数字已写进 rules.html / README）
+backtest/*.html
+backtest/*.csv
+backtest/stops.json
+backtest/factors.json
+backtest/rank.json
+backtest/picks_recent.json
+backtest/exit_compare.json
+backtest/partial_exit.json
+backtest/gap_sweep.json
+backtest/industry.json
+backtest/flow_check.json
+backtest/flow_check.csv

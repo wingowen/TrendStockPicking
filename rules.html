@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>突破趋势跟踪 · 出入场规则卡</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --ink:#2C2C2A; --ink2:#5F5E5A; --ink3:#888780;
+    --line:#e7e8ec; --up:#2f9e6e; --up-bg:#e8f5ee; --down:#d0524a; --down-bg:#fdeceb;
+    --amber:#b8792a; --amber-bg:#fdf3e6; --blue:#3b6ea5; --violet:#7F77DD;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .page{max-width:960px;margin:0 auto;padding:34px 24px 70px}
+  header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px}
+  h1{font-size:23px;margin:0 0 6px;letter-spacing:.01em}
+  header p{margin:0;color:var(--ink3);font-size:12.5px}
+  .ver{display:inline-block;margin-top:10px;font-size:11px;color:var(--ink2);
+    background:#eceef2;border-radius:20px;padding:2px 10px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px 20px;margin-bottom:16px}
+  section h2{font-size:16px;margin:0 0 4px;display:flex;align-items:baseline;gap:9px}
+  section h2 i{font-style:normal;font-size:11.5px;color:#fff;background:var(--violet);
+    border-radius:5px;padding:1px 7px;font-weight:600;letter-spacing:.02em}
+  section .lead{font-size:12.5px;color:var(--ink3);margin:0 0 14px}
+  .steps{counter-reset:s;margin:0;padding:0;list-style:none}
+  .steps li{counter-increment:s;position:relative;padding:11px 0 11px 40px;border-top:1px dashed #eceef1}
+  .steps li:first-child{border-top:none;padding-top:4px}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:14px;width:24px;height:24px;
+    border-radius:50%;background:#f0eefb;color:var(--violet);font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  .steps li strong{display:block;font-size:13.5px;margin-bottom:1px}
+  .steps li span{font-size:12.5px;color:var(--ink2)}
+  .steps li em{font-style:normal;color:var(--ink3);font-size:11.5px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin:2px 0 4px}
+  thead th{text-align:left;font-size:11px;font-weight:500;color:var(--ink3);
+    padding:7px 10px;background:#fafbfc;border-bottom:1px solid var(--line);white-space:nowrap}
+  tbody td{padding:8px 10px;border-bottom:1px solid #f0f1f3;vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+  .pos{color:var(--up);font-weight:600}
+  .neg{color:var(--down);font-weight:600}
+  .note{font-size:11.5px;color:var(--ink3);margin-top:8px}
+  .callout{border-radius:10px;padding:11px 13px;font-size:12.5px;margin-top:12px;line-height:1.7}
+  .callout.warn{background:var(--amber-bg);color:#8a5a12;border:1px solid #f0dcc0}
+  .callout.good{background:var(--up-bg);color:#1f6b4b;border:1px solid #cfe4d6}
+  .callout.flat{background:#f4f6fa;color:var(--ink2);border:1px solid #e3e7f0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .box{border:1px solid var(--line);border-radius:11px;padding:13px 14px;background:#fcfcfd}
+  .box h3{font-size:12.5px;margin:0 0 6px;color:var(--ink2);font-weight:600}
+  .box .big{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+  .box .big small{font-size:11.5px;font-weight:500;color:var(--ink3);margin-left:4px}
+  .box .sub{font-size:11.5px;color:var(--ink3);margin-top:4px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  .chip{font-size:11.5px;color:var(--ink2);background:#f3f4f7;border:1px solid var(--line);
+    border-radius:20px;padding:2px 10px}
+  .chip b{color:var(--ink);font-weight:600}
+  /* 回撤浮窗 */
+  .eq-fab{position:fixed;right:22px;bottom:22px;z-index:60;background:var(--violet);color:#fff;
+    border:none;border-radius:22px;padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;
+    box-shadow:0 8px 24px rgba(90,80,200,.28);letter-spacing:.02em}
+  .eq-fab:hover{filter:brightness(1.06)}
+  .eq-float{position:fixed;right:22px;bottom:70px;z-index:61;width:min(580px,calc(100vw - 32px));
+    max-height:76vh;background:#fff;border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 20px 60px rgba(20,20,30,.2);display:flex;flex-direction:column;overflow:hidden}
+  .eq-float[hidden]{display:none}
+  .eq-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+  .eq-head b{font-size:14px}
+  .eq-head span{display:block;font-size:11px;color:var(--ink3);margin-top:2px}
+  .eq-close{border:none;background:#f1f2f5;color:var(--ink2);width:24px;height:24px;border-radius:50%;
+    cursor:pointer;font-size:15px;line-height:1}
+  .eq-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border-bottom:1px solid var(--line)}
+  .eq-kpi{background:#fff;padding:9px 10px}
+  .eq-kpi small{display:block;font-size:10.5px;color:var(--ink3)}
+  .eq-kpi b{font-size:14px;font-variant-numeric:tabular-nums}
+  .eq-body{overflow:auto;padding:10px 12px 12px;-webkit-overflow-scrolling:touch}
+  .eq-sec{font-size:11px;color:var(--ink3);margin:6px 2px 3px;display:flex;justify-content:space-between}
+  .eq-svgwrap{overflow-x:auto;overflow-y:hidden}
+  .eq-svgwrap svg{display:block}
+  .eq-foot{font-size:10.5px;color:var(--ink3);padding:0 14px 12px;line-height:1.6}
+
+  footer{font-size:11.5px;color:var(--ink3);text-align:center;margin-top:26px;line-height:1.9}
+  footer a{color:var(--blue);text-decoration:none}
+  @media (max-width:760px){.two{grid-template-columns:1fr}.page{padding:22px 14px 50px}}
+  @media print{body{background:#fff}.page{max-width:none;padding:0}
+    section{break-inside:avoid;border-color:#ddd}header{margin-bottom:14px}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>突破趋势跟踪 · 出入场规则卡</h1>
+    <p>主板 · 量能确认 · 站稳 3 日 · 收盘价判定（信号用后复权，展示用不复权）</p>
+    <span class="ver">口径版本 2026-11-20 · 与面板 / 回测共用同一套参数</span>
+  </header>
+
+  <section>
+    <h2><i>总览</i>一句话版本</h2>
+    <p class="lead">只做已经突破、并且突破被成交量确认、站稳三天以上的主板股；<strong>次日开盘买</strong>，之后不设结构止损，靠 <strong>从最高价回撤 25%</strong> 离场，最长拿 120 个交易日。</p>
+    <div class="chips">
+      <span class="chip">股票池 <b>主板</b>（剔 ST / 科创 / 创业 / 北交所）</span>
+      <span class="chip">突破位 <b>前 20 日最高收盘</b></span>
+      <span class="chip">量比 <b>1.5–2.0×</b></span>
+      <span class="chip">站稳 <b>≥3 日 · ≥3%</b></span>
+      <span class="chip">入场 <b>次日开盘</b></span>
+      <span class="chip">出场 <b>回撤 25%</b></span>
+      <span class="chip">上限 <b>120 个交易日</b></span>
+    </div>
+  </section>
+
+  <section>
+    <h2><i>入场</i>四步筛出信号</h2>
+    <p class="lead">全部用<strong>收盘价</strong>判定，不看盘中最高价，避免假突破。四步从后往前都能独立复核。</p>
+    <ol class="steps">
+      <li><strong>定突破位</strong>
+        <span>取信号日前 <b>20 个交易日</b>的最高收盘价作为突破位 <code>level</code>。突破必须发生在近 <b>8 个交易日</b>内，且当天收盘 &gt; level、前一天收盘 ≤ level（第一天站上去）。</span>
+        <em>用最早的一次“仍然有效”的突破：从突破日到信号日，收盘一次都没跌回 level 下方；否则重新算。</em></li>
+      <li><strong>量能确认</strong>
+        <span>突破日成交量 ÷ 突破日前 5 日均量，必须落在 <b>1.5–2.0 倍</b>。</span>
+        <em>低于 1.5 倍是没量的假突破；高于 2.0 倍多半是消息面一次性放量，后续接力差（回测里 1.9 倍以上也明显变差）。</em></li>
+      <li><strong>站稳三天且幅度够</strong>
+        <span>信号日距突破日 <b>≥3 个交易日</b>，且这段时间每个交易日收盘都 &gt; 突破位；信号日收盘相对突破位涨幅 <b>≥3%</b>。</span>
+        <em>不符合就进“未通过”表，附淘汰原因，方便回头复盘。</em></li>
+      <li><strong>满 3 天进确认名单，次日开盘买入</strong>
+        <span>信号在收盘后产生，<b>下一个交易日开盘价买入</b>。若开盘较信号日收盘<b>高开 &gt;9.5%</b>，视为买不进；<b>低开 &gt;3%</b> 视为隔夜情绪反转，同样放弃这笔。回测 2020–2026：被这条拦掉的 868 笔单笔 <b>−3.32%</b>、胜率 29.5%，拦掉后 6 仓口径由 +46.24% 升到 <b>+48.34%</b>、回撤 −19.81% → <b>−18.60%</b>。</span>
+        <em>不做次日盘中追价，也不在信号日当天买入（那是未来函数）。</em></li>
+    </ol>
+    <div class="callout flat"><b>板块与大盘怎么用：</b>不参与“能不能买”，只影响<b>排序</b>与<b>是否动手</b>。大盘弱时信号照常记录，但历史同口径单笔期望最低，默认只观察、不进场。</div>
+  </section>
+
+  <section>
+    <h2><i>两段式</i>观察池 → 确认名单</h2>
+    <p class="lead">信号不是等三天才出现的：<strong>突破日当天</strong>就进「观察池」，第三天收盘才决定它能不能进「确认名单」。</p>
+    <table>
+      <thead><tr><th>阶段</th><th>进入条件</th><th>页面位置</th><th>怎么用</th></tr></thead>
+      <tbody>
+        <tr><td><b>观察池</b><br><span style="color:var(--ink3)">第 1–2 天</span></td>
+            <td>收盘突破前 20 日最高收盘 + 突破日量比 1.5–2.0×</td>
+            <td>「新突破观察池（未满 3 天）」表</td>
+            <td>只盯不做，等第 3 天；任一天收盘跌破突破位即出池</td></tr>
+        <tr><td><b>确认名单</b><br><span style="color:var(--ink3)">第 3 天起</span></td>
+            <td>连续 3 个交易日收盘都在突破位上方，且距突破位 ≥3%</td>
+            <td>「全部通过条件的标的」+ 顶部精选卡</td>
+            <td>按排序分、95 分线决定当天买不买</td></tr>
+      </tbody>
+    </table>
+    <div class="callout flat">观察池里“距突破位”为负的，就是已经收盘跌破突破位的票——它们不会再进确认名单，直接在页面上标红出池，不用等三天。</div>
+  </section>
+
+  <section>
+    <h2><i>排序</i>今天先看哪几只</h2>
+    <p class="lead">通过四步的票每天可能十几只，按 <strong>排序分</strong>取前 3，<strong>95 分</strong>才算达标。分数只用信号当日可知信息，不含任何未来数据。</p>
+    <table>
+      <thead><tr><th>维度</th><th>赋分</th><th>为什么这么给（7 年分层的单笔期望）</th></tr></thead>
+      <tbody>
+        <tr><td>大盘</td><td class="num">强 +40 / 弱 +5 / 震荡 −20</td><td>强 +2.22%、弱 +0.38%、震荡 −0.79%</td></tr>
+        <tr><td>板块评分</td><td class="num">75 → +25 · 100 → +10 · 50 → +5</td><td>75 分（刚转强）+2.10%，100 分反而只有 +1.05%</td></tr>
+        <tr><td>连续净流入</td><td class="num">≥3 日 +12 · 1–2 日 +6</td><td>真实主力净流入连续为正，方向一致才加分</td></tr>
+        <tr><td>站稳天数</td><td class="num">6–8 天 +15 · 5 天 +10 · 3–4 天 +5</td><td>6 天 +2.85%、7 天 +2.60%、8 天 +1.84%（越稳越好）</td></tr>
+        <tr><td>距突破位</td><td class="num">&lt;5% +25 · 5–8% +12 · 8–12% 0 · &gt;12% −25</td><td>3–5% +2.17% 单调降到 &gt;12% 的 −2.58%（追高最差）</td></tr>
+        <tr><td>量比</td><td class="num">&lt;1.8 +10 · 1.8–1.9 +2 · ≥1.9 +6</td><td>1.65–1.8 最优 +1.61%</td></tr>
+      </tbody>
+    </table>
+    <div class="two" style="margin-top:14px">
+      <div class="box"><h3>达标线</h3><div class="big">95<small>分</small></div>
+        <div class="sub">≥95 分才进“今日最该关注”，每日最多 3 只</div></div>
+      <div class="box"><h3>该口径实测</h3><div class="big pos">+4.71%<small>/ 笔 · 胜率 44.9%</small></div>
+        <div class="sub">1528 笔 · 3 仓组合 +32.6% · 最大回撤 −8.9%</div></div>
+    </div>
+    <div class="callout warn"><b>弱市/震荡经常一只都到不了 95 分。</b>这时面板显示“今日优先观察”，把前 3 名降级展示并标注“只观察”——这是设计意图，不是程序故障。宁可空仓，不凑单。</div>
+  </section>
+
+  <section>
+    <h2><i>仓位</i>每笔下多重</h2>
+    <div class="two">
+      <div class="box"><h3>单笔风险预算</h3><div class="big">2%<small>账户权益</small></div>
+        <div class="sub">以“回撤 25% 即离场”为风险距离折算：2% ÷ 25% ≈ <b>8% 资金/笔</b></div></div>
+      <div class="box"><h3>并发上限</h3><div class="big">6<small>笔</small></div>
+        <div class="sub">同一天最多买 3 只（精选上限），仓位按代码顺序分配，不按当天涨幅挑</div></div>
+    </div>
+    <p class="note">同一天出现多只信号时，按代码固定顺序建仓而不是按收益预期挑单——回测里这样做是为了避免“用未来收益挑最好的那只”的偏差，实盘照做即可。</p>
+  </section>
+
+  <section>
+    <h2><i>出场</i>三条规则，一条硬止损都不设</h2>
+    <p class="lead">出场判定用<strong>日收盘价</strong>，触发后<strong>次日开盘卖出</strong>。突破位本身<b>不作为止损</b>。</p>
+    <ol class="steps">
+      <li><strong>移动止盈：从持仓期最高收盘回撤 25%</strong>
+        <span>每天用持仓期间的最高收盘价 <code>peak</code> 更新阈值 <code>peak × 75%</code>；某日收盘跌破就次日开盘全部卖出。</span>
+        <em>这是主力出场方式。回测 21298 笔里，25% 是最优点：18% 太紧（−0.4%）、纯持有回撤 −34.6%。</em></li>
+      <li><strong>时间到点：持有 120 个交易日</strong>
+        <span>从买入日算第 <b>120 个交易日</b>收盘仍未触发移动止盈，就在第 121 日开盘平仓。</span>
+        <em>趋势跟踪给足时间，7 年数据里平均持仓 85.5 天。</em></li>
+      <li><strong>跌破突破位不砍</strong>
+        <span>收盘跌破原突破位<b>不卖</b>，继续按 25% 移动止盈管理。</span>
+        <em>回测对照（2020–2026，21298 笔）：跌破位就走 单笔 <b>−0.27%</b>、胜率 18.7%、6 仓 <b>−35.6%</b>、回撤 −39.3%；去掉它之后单笔 +1.14%、6 仓 +48.3%。连「破位只减 1/3」也减分（+46.2% → +36.3%、Sharpe 0.55 → 0.48）——71.6% 的信号持仓期都碰到过破位，那是常态回踩，不是失败信号。</em></li>
+    </ol>
+    <div class="callout flat"><b>成本：</b>双边合计按 <b>0.4%</b> 计（佣金 + 印花税 + 滑点），回测的每笔收益都已扣掉。</div>
+  </section>
+
+  <section>
+    <h2><i>持仓池</i>面板上的「当前持仓」是什么</h2>
+    <p class="lead">面板里的「当前持仓（策略模拟池）」是按本策略<strong>最多同时持有 6 只（6 仓上限，不做行业互斥）</strong>模拟出来的虚拟池子：每个确认信号一笔，用来回答“照这套规则，我现在的 6 个仓位应该装哪 6 只”。</p>
+    <ol class="steps">
+      <li><strong>入场</strong><span>某突破首次满足全部确认条件（量比 1.5–2.0 + 站稳 ≥3 天 + 距突破位 ≥3%）的<b>次日开盘</b>买入；高开 &gt;9.5% 或低开 &gt;3% 放弃；同一突破只做一次。</span></li>
+      <li><strong>仓位上限</strong><span>最多同时持有 <b>6 只</b>：满仓时新信号直接跳过（先入为主），有仓位卖出释放后才接新单；同日多信号按代码顺序取（固定规则，不用未来收益挑）。不做行业互斥——专项回测显示它明显减分（6 仓实盘 +46.2% → −8.0%；等权 +6.35% → +1.77%，详见 backtest/industry.html）。</span></li>
+      <li><strong>出场</strong><span>收盘从持仓峰值回撤 <b>25%</b>，或持有满 <b>120 个交易日</b> → 次日开盘卖出。表里「待卖出」= 今日收盘已触发、明日开盘执行。</span></li>
+      <li><strong>口径</strong><span>收益按后复权计算、<b>未扣</b>双边约 0.4% 成本；信号自 2025-01-01 起累计。每行可展开看日K/分时，实时价 30 秒刷新。</span></li>
+    </ol>
+    <div class="callout flat"><b>注意：</b>这是 6 个仓位的满负荷状态（通常 5–6 只，偶尔空仓），与回测基准同口径（2020–2026：累计 +48.3%、年化约 5.9%、最大回撤 −18.6%、Sharpe 0.57）。它回答“现在该拿哪几只”，<b>不等于建议按这个名单无脑下单</b>——实际下单仍按上面「仓位」一节（2% 风险预算、6 笔并发、每天 ≤3 只精选）。<b>行业互斥已单独回测，是减分项</b>（6 仓实盘 +46.2% → −8.0%、回撤 −19.8% → −27.6%；被跳过的 19332 笔单笔 +1.17%，并不比入选的差），所以持仓池不启用行业限制，只作分散度参考。</div>
+  </section>
+
+  <section>
+    <h2><i>数据</i>口径与更新</h2>
+    <table>
+      <thead><tr><th>项目</th><th>口径</th></tr></thead>
+      <tbody>
+        <tr><td>行情来源</td><td>东方财富公开日线（本地 <code>backtest/market.db</code>），主板 3117 只</td></tr>
+        <tr><td>信号计算</td><td>后复权日线（除权不会制造假突破）</td></tr>
+        <tr><td>页面展示价</td><td>按突破日比例折回不复权真实价，可直接与行情软件对照</td></tr>
+        <tr><td>板块趋势</td><td>成分股等权指数 + 站上 MA20/MA60 + 20 日动量 + 近 5 日主力净流入（优先东财真实净占比，覆盖 88/121 个板块，其余用成交额代理）</td></tr>
+        <tr><td>大盘状态</td><td>上证 vs MA20/MA60 + 20/60 日动量 + 量能 → 强 / 震荡 / 弱</td></tr>
+        <tr><td>内嵌图表</td><td>行点开 → 日K（本地库近 60 根，含 MA5/10/20、突破位虚线）/ 分时（东财实时接口，需联网）</td></tr>
+        <tr><td>每日更新</td><td><code>./run_daily.sh</code>（抓数据 → 板块资金 → 生成面板）；盘中预览 <code>--intraday</code>，量比按当前成交量、收盘后才定稿</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2><i>已知弱点</i>必须一起看</h2>
+    <div class="callout warn">
+      <b>样本很薄：</b>7 年 6 仓只成交约百笔，单笔 +1.14%；剔除收益最高的 50 笔（占 0.23%）后掉到 +0.46%，剔除前 100 笔只剩 +0.04%。收益高度集中在极少数大牛股（最大单笔 +731%）。
+    </div>
+    <div class="callout warn">
+      <b>95 分线以上只有 1528 笔：</b>分档与 25% 止盈都是在同一段历史上选出来的，存在“参数挑在历史上最优点”的风险。实盘前 20–30 笔请只按规则执行、不改参数，先攒自己的样本。
+    </div>
+    <div class="callout flat">
+      <b>回踩只是参考：</b>“等回踩确认再进”实测单笔 −0.19%，不如信号日直接买，所以回踩不进排序分，只在面板明细里看结构。
+    </div>
+  </section>
+
+  <footer>
+    规则卡由 <b>backtest/run_backtest.py</b> 的 BASE 参数与 <b>build_panel_from_db.py</b> 的判定常量生成 · 与面板同步维护<br>
+    改参数请同时改这两处，并重跑 README 第八节的“每日精选”校验 · <a href="breakout-panel.html">回到突破面板 →</a>
+  </footer>
+
+</div>
+
+<button class="eq-fab" id="eqFab" type="button">回撤曲线</button>
+<div class="eq-float" id="eqFloat" hidden>
+  <div class="eq-head">
+    <div><b>策略净值与回撤</b><span id="eqMeta"></span></div>
+    <button class="eq-close" id="eqClose" type="button" aria-label="收起">×</button>
+  </div>
+  <div class="eq-kpis" id="eqKpis"></div>
+  <div class="eq-body">
+    <div class="eq-sec"><span>净值（起点 = 1.00）</span><span>紫 = 策略 · 灰 = 沪深300 · ← 左右滑动看全部</span></div>
+    <div class="eq-svgwrap"><svg id="eqChart" width="920" height="232"></svg></div>
+    <div class="eq-sec"><span>回撤（距历史峰值）</span><span id="eqDdLabel"></span></div>
+    <div class="eq-svgwrap"><svg id="eqDD" width="920" height="132"></svg></div>
+  </div>
+  <div class="eq-foot" id="eqFoot"></div>
+</div>
+<script src="backtest/equity_data.js"></script>
+<script>
+(function(){
+  var D = window.EQUITY_DATA;
+  var fab = document.getElementById('eqFab');
+  var panel = document.getElementById('eqFloat');
+  if (!D || !fab || !panel) return;
+  var svgNS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs){ var e=document.createElementNS(svgNS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
+  function fmtPct(v, d){ return (v>=0?'+':'') + (v*100).toFixed(d===undefined?2:d) + '%'; }
+  function fmtDate(s){ return s.indexOf('-')>0 ? s.slice(2,7) : s.slice(2,4)+'-'+s.slice(4,6); }
+
+  var M = D.meta;
+  document.getElementById('eqMeta').textContent = M.label + ' · ' + fmtDate(M.start) + ' → ' + fmtDate(M.end) + ' · 成交 ' + M.fills + ' 笔 / 全市场信号 ' + M.trades + ' 笔';
+  var kpis = [
+    ['累计', fmtPct(M.total), M.total>=0?'var(--up)':'var(--down)'],
+    ['年化', fmtPct(M.cagr), M.cagr>=0?'var(--up)':'var(--down)'],
+    ['最大回撤', fmtPct(M.mdd), 'var(--down)'],
+    ['Sharpe', M.sharpe.toFixed(2), 'var(--ink)'],
+    ['胜率', (M.win*100).toFixed(1)+'%', 'var(--ink)'],
+    ['单笔期望', fmtPct(M.avg), M.avg>=0?'var(--up)':'var(--down)'],
+    ['最长水下', M.longest_underwater+' 天', 'var(--amber)'],
+    ['当前回撤', fmtPct(M.current_dd), 'var(--down)']
+  ];
+  var box = document.getElementById('eqKpis');
+  kpis.forEach(function(k){
+    var d = document.createElement('div'); d.className='eq-kpi';
+    d.innerHTML = '<small>'+k[0]+'</small><b style="color:'+(k[2]||'var(--ink)')+'">'+k[1]+'</b>';
+    box.appendChild(d);
+  });
+  document.getElementById('eqDdLabel').textContent = '最深 ' + fmtPct(M.mdd) + ' · ' + fmtDate(M.mdd_peak) + ' → ' + fmtDate(M.mdd_trough);
+  document.getElementById('eqFoot').innerHTML = '口径：6 仓、每仓约 8% 权益（2% 风险预算）、信号次日开盘买入、高开 &gt;9.5% 或低开 &gt;3% 放弃、从峰值回撤 25% 或满 120 日卖出、跌破突破位不砍。曲线可左右滑动查看；起点归一化为 1.00，未计分红再投资以外的现金收益。';
+
+  function renderLine(svg, vals, min, max, opt){
+    var W = 920, H = opt.height, PL = 44, PR = 12, PT = opt.padTop, PB = 22;
+    var n = vals.length;
+    function x(i){ return PL + i/(n-1)*(W-PL-PR); }
+    function y(v){ return PT + (max-v)/(max-min)*(H-PT-PB); }
+    svg.setAttribute('viewBox', '0 0 '+W+' '+H);
+    // 网格
+    if (!opt.noGrid) for (var g=0; g<=3; g++){
+      var gv = min + (max-min)*g/3, gy = y(gv);
+      svg.appendChild(el('line',{x1:PL,x2:W-PR,y1:gy,y2:gy,stroke:'#eef0f3','stroke-width':1}));
+      var t = el('text',{x:PL-6,y:gy+4,'text-anchor':'end','font-size':10,fill:'#9a9a94'});
+      t.textContent = opt.yLabel(gv);
+      svg.appendChild(t);
+    }
+    if (opt.shade && opt.shade[0] != null){
+      var a = opt.shade[0], b = opt.shade[1];
+      svg.appendChild(el('rect',{x:x(a),y:PT,width:Math.max(2,x(b)-x(a)),height:H-PT-PB,fill:'rgba(208,82,74,.09)'}));
+    }
+    var d = 'M'+x(0).toFixed(1)+' '+y(vals[0]).toFixed(1);
+    for (var i=1;i<n;i++) d += 'L'+x(i).toFixed(1)+' '+y(vals[i]).toFixed(1);
+    svg.appendChild(el('path',{d:d,fill:'none',stroke:opt.color,'stroke-width':opt.width||1.6,'stroke-linejoin':'round'}));
+    // x 轴日期
+    var step = Math.max(1, Math.floor(n/7));
+    if (opt.xAxis !== false) for (var j=0;j<n;j+=step){
+      var tx = el('text',{x:x(j),y:H-6,'text-anchor':'middle','font-size':10,fill:'#9a9a94'});
+      tx.textContent = fmtDate(D.dates[j]);
+      svg.appendChild(tx);
+    }
+  }
+
+  var eqMin = Math.min.apply(null, D.eq.concat(D.bench)) * 0.98;
+  var eqMax = Math.max.apply(null, D.eq.concat(D.bench)) * 1.02;
+  var chart = document.getElementById('eqChart');
+  var pi = D.dates.indexOf(M.mdd_peak), ti = D.dates.indexOf(M.mdd_trough);
+  renderLine(chart, D.bench, eqMin, eqMax, {height:232,padTop:14,yLabel:function(v){return v.toFixed(2);},color:'#c9cbd2',width:1.2,shade:[pi,ti]});
+  renderLine(chart, D.eq, eqMin, eqMax, {height:232,padTop:14,yLabel:function(){return '';},color:'#6f63d2',width:1.9,noGrid:true,xAxis:false});
+
+  var ddMin = Math.min.apply(null, D.dd) * 1.06;
+  var dd = document.getElementById('eqDD');
+  renderLine(dd, D.dd, ddMin, 0, {height:132,padTop:8,yLabel:function(v){return (v*100).toFixed(0)+'%';},color:'#d0524a',width:1.2});
+  // 回撤面积
+  var W=920, PL=44, PR=12, PT=8, PB=22, n=D.dd.length;
+  var area = 'M'+PL+' '+(PT+(0-ddMin)/(0-ddMin)*(132-PT-PB));
+  for (var i2=0;i2<n;i2++){
+    var xx = PL + i2/(n-1)*(W-PL-PR);
+    var yy = PT + (0-D.dd[i2])/(0-ddMin)*(132-PT-PB);
+    area += 'L'+xx.toFixed(1)+' '+yy.toFixed(1);
+  }
+  area += 'L'+(W-PR)+' '+(PT+(132-PT-PB))+'L'+PL+' '+(PT+(132-PT-PB))+'Z';
+  dd.insertBefore(el('path',{d:area,fill:'rgba(208,82,74,.12)',stroke:'none'}), dd.firstChild);
+
+  function scrollLatest(){
+    document.querySelectorAll('.eq-svgwrap').forEach(function(w){ w.scrollLeft = w.scrollWidth; });
+  }
+  fab.addEventListener('click', function(){ panel.hidden = false; setTimeout(scrollLatest, 0); });
+  document.getElementById('eqClose').addEventListener('click', function(){ panel.hidden = true; });
+  panel.addEventListener('keydown', function(e){ if (e.key === 'Escape') panel.hidden = true; });
+})();
+</script>
+</body>
+</html>
