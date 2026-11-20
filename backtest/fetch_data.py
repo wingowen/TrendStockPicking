@@ -184,6 +184,9 @@ def main():
     if failed:
         print("失败样例：", failed[:5])
     con.close()
+    if len(failed) > total * 0.15:
+        print(f"失败率 {len(failed)/total:.1%} 过高，本次视为失败", flush=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

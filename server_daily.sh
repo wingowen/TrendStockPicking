@@ -14,9 +14,29 @@ LOG="$PWD/logs/daily-$(date +%Y%m%d).log"
 exec > >(tee -a "$LOG") 2>&1
 
 echo "=== $(date '+%F %T') 开始"
-(cd backtest && "$PY" -u fetch_data.py --force)
+
+# 东财会按 IP 限流：抓取失败率过高时退避重试，最多 3 轮
+attempt=0
+until (cd backtest && "$PY" -u fetch_data.py --force); do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 3 ]; then
+    echo "=== 抓取连续失败 3 轮，放弃 $(date '+%F %T')"
+    exit 1
+  fi
+  echo "=== 抓取失败，15 分钟后重试（$attempt/3）"
+  sleep 900
+done
 (cd backtest && "$PY" -u fetch_extra.py)
+
+# 板块主力净流入按天变化，缓存命中会一直用旧数据，这里每天清一次强制重抓
+rm -f fflow_cache.json
 "$PY" -u build_panel_from_db.py --days 30
+
+flow_cov=$(grep "真实覆盖" "$LOG" | tail -1 || true)
+echo "${flow_cov:-[flow] 无覆盖率输出}"
+case "$flow_cov" in
+  *"真实覆盖 0/"*) echo "=== 警告：板块资金流全缺，今日板块打分退回代理口径（名单可能与本地不同）";;
+esac
 (cd backtest && "$PY" -u export_equity.py)
 echo "=== 构建完成 $(date '+%F %T')"
 
