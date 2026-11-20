@@ -1,4 +1,4 @@
-name: probe-list
+name: probe-burst
 
 on:
   workflow_dispatch:
@@ -6,34 +6,55 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - name: 直接调用 fetch_data.list_get
+      - name: 连续请求 kline / 新浪列表 / 腾讯
         run: |
-          cd backtest
           python3 - <<'PY'
-          import urllib.request
-          import fetch_data as f
-          print("hosts:", f.LIST_HOSTS, "current:", f._list_host)
-          for pz in (5, 100):
-              path = f.LIST_PATH.replace("pz=100", "pz=%d" % pz)
-              for host in f.LIST_HOSTS:
-                  url = host + path.format(pn=1)
-                  try:
-                      r = urllib.request.urlopen(urllib.request.Request(
-                          url, headers={"User-Agent": f.UA, "Referer": "https://quote.eastmoney.com/"}),
-                          timeout=20)
-                      print("pz=%d %s -> %s %s %dB" % (pz, host, r.status, r.geturl(), len(r.read())))
-                  except Exception as e:
-                      print("pz=%d %s -> ERR %s %s" % (pz, host, type(e).__name__, e))
-          import time
-          for pn in range(1, 40):
+          import time, urllib.request
+
+          UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "Chrome/120.0 Safari/537.36")
+          H = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+
+          def hit(url, hdrs=H, timeout=20):
+              r = urllib.request.urlopen(urllib.request.Request(url, headers=hdrs), timeout=timeout)
+              return r.status, len(r.read())
+
+          K = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={sid}&klt=101&fqt=2"
+               "&beg=20240101&end=20251120&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57")
+
+          print("--- kline 连续 20 只（间隔 0.3s）")
+          codes = ["600000", "600004", "600006", "600007", "600008", "600009", "600010",
+                   "600011", "600012", "600015", "600016", "600017", "600018", "600019",
+                   "600020", "600021", "600022", "600023", "600025", "600026"]
+          for i, c in enumerate(codes):
+              sid = ("1." if c.startswith("6") else "0.") + c
               try:
-                  d = f.list_get(pn)
-                  print("pn=%d total=%d rows=%d" % (pn, d["data"]["total"], len(d["data"]["diff"])))
+                  s, n = hit(K.format(sid=sid))
+                  print("kline %2d %s -> %s %dB" % (i, c, s, n))
               except Exception as e:
-                  print("pn=%d ERR %s %s" % (pn, type(e).__name__, e))
-                  break
-              time.sleep(0.5)
+                  print("kline %2d %s -> ERR %s %s" % (i, c, type(e).__name__, e))
+              time.sleep(0.3)
+
+          print("--- 新浪全A列表 8 页")
+          for pn in range(1, 9):
+              u = ("https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+                   "Market_Center.getHQNodeData?page=%d&num=100&sort=symbol&asc=1&node=hs_a" % pn)
+              try:
+                  s, n = hit(u, {"User-Agent": UA, "Referer": "https://finance.sina.com.cn/"})
+                  print("sina page %d -> %s %dB" % (pn, s, n))
+              except Exception as e:
+                  print("sina page %d -> ERR %s %s" % (pn, type(e).__name__, e))
+              time.sleep(0.3)
+
+          print("--- 腾讯日线 6 只")
+          for c in codes[:6]:
+              u = ("https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh%s,day,,,320,qfq" % c)
+              try:
+                  s, n = hit(u, {"User-Agent": UA, "Referer": "https://gu.qq.com/"})
+                  print("tencent %s -> %s %dB" % (c, s, n))
+              except Exception as e:
+                  print("tencent %s -> ERR %s %s" % (c, type(e).__name__, e))
+              time.sleep(0.3)
           PY
