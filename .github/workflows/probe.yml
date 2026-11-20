@@ -1,4 +1,4 @@
-name: probe-tencent
+name: probe-pace
 
 on:
   workflow_dispatch:
@@ -6,66 +6,33 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - name: 腾讯日线能力与稳定性
+      - name: 单线程不同间隔下的 kline 成功率
         run: |
           python3 - <<'PY'
-          import json, time, urllib.request
+          import time, urllib.request
 
           UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                 "Chrome/120.0 Safari/537.36")
-          H = {"User-Agent": UA, "Referer": "https://gu.qq.com/"}
+          H = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+          K = ("https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.{c}&klt=101&fqt=2"
+               "&beg=20240101&end=20251120&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57")
 
-          def get(url):
-              with urllib.request.urlopen(urllib.request.Request(url, headers=H), timeout=25) as r:
-                  return json.loads(r.read().decode())
-
-          base = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param="
-
-          for tag in ("1800,hfq", "1800,qfq", "60,", "1800,"):
-              try:
-                  d = get(base + "sh600000,day,,," + tag)
-                  node = d["data"]["sh600000"]
-                  key = [k for k in node if "day" in k]
-                  arr = node[key[0]]
-                  print("%-10s keys=%s bars=%d first=%s last=%s" %
-                        (tag, key, len(arr), arr[0][:3], arr[-1][:3]))
-              except Exception as e:
-                  print("%-10s ERR %s %s" % (tag, type(e).__name__, e))
-              time.sleep(0.3)
-
-          print("--- 连续 30 只 hfq 稳定性")
-          ok = err = 0
-          codes = ["600000", "600004", "600006", "600007", "600008", "600009", "600010",
-                   "600011", "600012", "600015", "600016", "600017", "600018", "600019",
-                   "600020", "600021", "600022", "600023", "600025", "600026",
-                   "600027", "600028", "600029", "600030", "600031", "600032",
-                   "600033", "600035", "600036", "600037"]
-          t0 = time.time()
-          for c in codes:
-              try:
-                  d = get(base + "sh%s,day,,,1800,hfq" % c)
-                  n = len(d["data"]["sh%s" % c].get("hfqday") or d["data"]["sh%s" % c].get("day") or [])
-                  if n > 1000:
+          def run(gap, n, label):
+              ok = 0
+              codes = ["60%04d" % (i) for i in range(1, n + 1)]
+              t0 = time.time()
+              for i, c in enumerate(codes):
+                  try:
+                      urllib.request.urlopen(urllib.request.Request(K.format(c=c), headers=H), timeout=20).read()
                       ok += 1
-                  else:
-                      err += 1
-                      print("short %s bars=%d" % (c, n))
-              except Exception as e:
-                  err += 1
-                  print("ERR %s %s" % (c, e))
-              time.sleep(0.2)
-          print("30 只结果：ok=%d err=%d 用时 %.1fs" % (ok, err, time.time() - t0))
+                  except Exception as e:
+                      print("%s #%d %s -> %s" % (label, i, c, type(e).__name__))
+                  time.sleep(gap)
+              print("%s gap=%.1fs ok=%d/%d 用时 %.0fs" % (label, gap, ok, n, time.time() - t0))
 
-          print("--- 指数")
-          for sid in ("sh000001", "sz399001", "sz399006", "sh000300"):
-              try:
-                  d = get(base + "%s,day,,,30,hfq" % sid)
-                  node = d["data"][sid]
-                  key = [k for k in node if "day" in k]
-                  print(sid, key, len(node[key[0]]), node[key[0]][-1][:3])
-              except Exception as e:
-                  print(sid, "ERR", e)
-              time.sleep(0.2)
+          run(2.0, 15, "慢速")
+          time.sleep(5)
+          run(0.6, 15, "中速")
           PY
