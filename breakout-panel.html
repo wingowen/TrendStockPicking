@@ -781,7 +781,7 @@ function renderDay(){
       <tbody id="tbodyWatch">${watchRows}</tbody></table>` : '<div class="empty">当日没有刚突破、但还没满 3 天的标的</div>'}</div>`;
 
   // ---- 今日候选（v3 排序分；仅强市可开仓）----
-  const pm = day.picks_meta || {threshold:95, qualified:0, regime_strong:false};
+  const pm = day.picks_meta || {threshold:null, qualified:0, regime_strong:false};
   const strong = !!pm.regime_strong;
   const picks = (day.picks && day.picks.length) ? day.picks : (day.passed||[]).slice(0,3);
   const pickCards = picks.map((p,i)=>{
@@ -948,7 +948,7 @@ function renderDay(){
       <label title="回踩确认 = 回落后重新站上回踩前高点；只作结构参考，不进排序分">回踩
         <select id="fRet"><option value="">全部</option><option value="confirmed">回踩确认</option><option value="pull">回踩待确认</option><option value="none">未回踩</option></select></label>
       <label title="排序分 = v3 冻结线性分（大盘强弱 / 距突破位 / 站稳天数 / 量比），显示为 0–130 刻度">排序分
-        <select id="fScore"><option value="">全部</option><option value="95">≥95（达标）</option><option value="75">≥75</option><option value="50">≥50</option></select></label>
+        <select id="fScore"><option value="">全部</option><option value="86">≥86（前 25%）</option><option value="74">≥74（中位以上）</option><option value="60">≥60</option></select></label>
       <button id="fClear">清空条件</button>
       <span class="fhint" id="fSaved" style="color:#9aa3b0">条件会自动记住</span>
       <span class="fhint">条件各自独立、可叠加；表头再点一次反向排序</span>
