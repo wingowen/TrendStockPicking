@@ -1,0 +1,32 @@
+{
+ "n": 20430,
+ "start": "2020-01-03",
+ "end": "2026-11-20",
+ "cols": [
+  "code",
+  "name",
+  "breakout_date",
+  "signal_date",
+  "entry_date",
+  "entry",
+  "level",
+  "vol_ratio",
+  "gain",
+  "days_above",
+  "regime",
+  "industry",
+  "sec_score",
+  "sec_consec",
+  "sec_flow5",
+  "sec_mom20",
+  "exit_date",
+  "exit",
+  "ret",
+  "hold",
+  "reason",
+  "mfe",
+  "mae",
+  "fwd20",
+  "bench20"
+ ]
+}

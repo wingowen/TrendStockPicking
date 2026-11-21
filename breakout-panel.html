@@ -773,22 +773,20 @@ function renderDay(){
     <div class="filters" style="margin-bottom:8px">
       <label style="cursor:pointer"><input type="checkbox" id="wNew" style="vertical-align:-2px"> 只看今日突破</label>
       <label style="cursor:pointer"><input type="checkbox" id="wHideBroken" style="vertical-align:-2px"> 隐藏已破位</label>
-      <span class="fhint">第 3 天收盘仍站稳且涨幅 ≥3% → 自动进下方“全部通过”与精选；收盘跌破突破位 → 出池</span>
+      <span class="fhint">第 3 天收盘仍站稳且涨幅 ≥3% → 自动进下方“全部通过”与今日候选；收盘跌破突破位 → 出池</span>
     </div>
     <div class="tbl">${watch.length ? `<table>
       <thead><tr><th>股票</th><th>行业 / 板块</th><th>突破日 / 突破位</th><th class="num">第几天</th>
       <th class="num">距突破位</th><th class="num">实时</th><th class="num">量比</th><th class="num">突破日成交额</th><th>状态</th></tr></thead>
       <tbody id="tbodyWatch">${watchRows}</tbody></table>` : '<div class="empty">当日没有刚突破、但还没满 3 天的标的</div>'}</div>`;
 
-  // ---- 今日精选（排序分 + 分数线）----
-  const pm = day.picks_meta || {threshold:95, qualified:0};
+  // ---- 今日候选（v3 排序分；仅强市可开仓）----
+  const pm = day.picks_meta || {threshold:95, qualified:0, regime_strong:false};
+  const strong = !!pm.regime_strong;
   const picks = (day.picks && day.picks.length) ? day.picks : (day.passed||[]).slice(0,3);
   const pickCards = picks.map((p,i)=>{
-    const hit = (p.rank_score||0) >= (pm.threshold||95);
-    const secTxt = p.sector ? `${p.sector.label} ${p.sector.score} · 连${p.sector.consec}日` : '—';
-    const rtTxt = p.retest && p.retest.state==='confirmed' ? '回踩确认'
-      : (p.retest && p.retest.state==='pull' ? '回踩待确认' : '未回踩');
-    return `<div class="pcard ${hit?'hit':''}">
+    const tag = strong ? '强市 · 可开仓候选' : '非强市 · 只记录不开仓';
+    return `<div class="pcard ${strong?'hit':''}">
       <div class="rk"><b>#${i+1}</b></div>
       <h3>${p.name}</h3>
       <div class="sub">${p.code} · ${p.industry||'—'} · ${p.board||''}</div>
@@ -798,21 +796,20 @@ function renderDay(){
         <div>距突破位 <b class="pos">+${num(p.gain)}%</b></div>
         <div>站稳 <b>${p.days_above} 天</b></div>
         <div>量比 <b>${num(p.vol_ratio)}×</b></div>
-        <div>板块 <b>${secTxt}</b></div>
         <div>突破位 <b>${num(p.level)}</b></div>
-        <div>回踩 <b>${rtTxt}</b></div>
       </div>
-      <span class="tag ${hit?'hit':'wait'}">${hit?'达标 · 可关注':'未过 95 分线 · 只观察'}</span>
+      <span class="tag ${strong?'hit':'wait'}">${tag}</span>
     </div>`;
   }).join('');
   const pickSection = picks.length ? `
-    <div class="section-head" style="margin-top:4px"><h2>${(day.picks||[]).length?'今日最该关注':'今日优先观察（无标的过 95 分线）'}</h2>
-      <span class="hint">按排序分取前 3 · 分数线 ${pm.threshold} · 达标 ${pm.qualified ?? 0} 只${day.intraday?' · <b style="color:var(--amber)">盘中数据：量比按当前成交量，收盘后才最终确定</b>':''}${day.regime&&day.regime.label==='弱'?' · <b style="color:var(--amber)">大盘弱：同口径历史单笔期望最低，建议只记录不进场</b>':''}</span></div>
+    <div class="section-head" style="margin-top:4px"><h2>${strong?'今日最该关注':'今日观察（非强市不开仓）'}</h2>
+      <span class="hint">强市里按排序分取前 3（与回测同一填仓顺序）${day.intraday?' · <b style="color:var(--amber)">盘中数据：量比按当前成交量，收盘后才最终确定</b>':''}${strong?'':' · <b style="color:var(--amber)">大盘非强市：v3 口径当日不开新仓，本卡仅供记录</b>'}</span></div>
     <div class="picks">${pickCards}</div>
     <div class="meta" style="font-size:11px;color:var(--ink3);margin:8px 2px 16px;line-height:1.7">
-      排序分只用信号当日可知信息：大盘（强 +40 / 弱 +5 / 震荡 −20）+ 板块（75 分 +25 / 100 分 +10）+ 连续净流入（≥3 日 +12）+ 站稳天数（6–8 天 +15）+ 距突破位（&lt;5% +25，&gt;12% −25）+ 量比（&lt;1.8 +10）。
-      回测（2020–2026，21298 笔信号）：分 ≥95 的标的单笔 <b>+4.71%</b>、胜率 44.9%（全体 +1.14%）；每日最多取 3 只、3 仓组合净值 <b>+32.6%</b>、最大回撤 <b>−8.9%</b>。
-      执行口径：单笔按权益 2% 风险预算建仓（约 8% 资金），最多 3–6 笔并发；不设结构止损，从持仓最高价回撤 <b>25%</b> 平仓，最长持有 120 个交易日。
+      v3 排序分只用信号当日可知信息，4 个因子（系数已冻结）：大盘强 +1 / 弱 −1 · 距突破位越近越好 · 站稳天数越多越好 · 量比 1.65–1.8 略优。显示值为 0–130 展示刻度，排序与回测完全同序。
+      组合口径：5 万本金 · 最多 10 仓等额 · 每日最多开 3 仓 · 仅强市开仓 · 空仓按 1.5% 年化计息 · 权益从近 252 日滚动高点回撤 10%/15% 时降档。
+      样本外（2022 年起独立起跑，86 笔）：累计 <b>+19.3%</b>、年化 <b>+3.72%</b>、最大回撤 <b>−21.2%</b>、Sharpe 0.34；同期沪深300 <b>−19.6%</b>。全样本：累计 +25.0%、年化 3.32%、回撤 −27.3%、Sharpe 0.30。
+      出场：不设个股结构止损，从持仓最高价回撤 <b>25%</b> 或持有满 <b>120 个交易日</b> → 次日开盘卖出（5 个变体样本外差异在噪声内，参数冻结）。
     </div>` : '';
 
   // ---- 当前持仓（策略模拟池）----
@@ -881,7 +878,7 @@ function renderDay(){
         <tbody>${closedRows}</tbody></table></div>
     </details>` : ''}
     <div class="meta" style="font-size:11px;color:var(--ink3);margin:8px 2px 16px;line-height:1.7">
-      模拟口径：<b>最多同时持有 6 只（6 仓上限），不做行业互斥</b>——每个确认信号（量比 1.5–2.0 + 站稳 ≥3 天 + 距突破位 ≥3%）一笔，信号次日开盘买入（<b>高开 &gt;9.5% 或低开 &gt;3% 放弃</b>，同一突破只做一次；<b>满 6 只时新信号跳过，先入为主，有空位才接</b>，同日多信号按代码顺序）；收盘从持仓峰值回撤 <b>25%</b> 或持有满 <b>120 个交易日</b> → 次日开盘卖出。「待卖出」= 今日收盘已触发出场，明日开盘执行。收益按后复权计算、未扣双边约 0.4% 成本。信号自 ${pmeta.since||'2025-01-01'} 起累计。这个池子回答的是「6 个仓位现在应该装哪 6 只」，比 95 分精选宽。<b style="color:var(--amber)">行业互斥已单独回测，是减分项</b>（6 仓实盘 +46.2%→−8.0%，详见 backtest/industry.html），所以此池不启用行业限制。
+      模拟口径（v3）：<b>最多同时持有 10 只（10 仓等额），仅强市开新仓，不做行业互斥</b>——每个确认信号（量比 1.5–2.0 + 站稳 ≥3 天 + 距突破位 ≥3%）一笔，信号次日开盘买入（<b>高开 &gt;9.5% 或低开 &gt;3% 放弃</b>，同一突破只做一次）；<b>同日多信号按 v3 排序分从高到低填仓，每日最多开 3 仓</b>，仓位满则跳过；收盘从持仓峰值回撤 <b>25%</b> 或持有满 <b>120 个交易日</b> → 次日开盘卖出。「待卖出」= 今日收盘已触发出场，明日开盘执行。信号自 ${pmeta.since||'2025-01-01'} 起累计。<b style="color:var(--amber)">本池是信号跟踪，不是净值</b>：未扣双边约 0.4% 成本、未按 10% 等额定仓，因此浮盈会明显高于回测净值（v3 全样本年化 3.32%）。行业互斥的旧结论（+46.2%→−8.0%）出自已作废的 v1 代码顺序引擎，不作为决策依据。
     </div>`;
 
   m.innerHTML = `
@@ -950,7 +947,7 @@ function renderDay(){
         <select id="fVol"><option value="">全部</option><option value="1.5-1.65">1.5–1.65×</option><option value="1.65-1.8">1.65–1.8×</option><option value="1.8-1.9">1.8–1.9×</option><option value="1.9-2.0">≥1.9×</option></select></label>
       <label title="回踩确认 = 回落后重新站上回踩前高点；只作结构参考，不进排序分">回踩
         <select id="fRet"><option value="">全部</option><option value="confirmed">回踩确认</option><option value="pull">回踩待确认</option><option value="none">未回踩</option></select></label>
-      <label title="排序分 = 大盘/板块/资金/站稳/追高幅度/量比的加权期望分">排序分
+      <label title="排序分 = v3 冻结线性分（大盘强弱 / 距突破位 / 站稳天数 / 量比），显示为 0–130 刻度">排序分
         <select id="fScore"><option value="">全部</option><option value="95">≥95（达标）</option><option value="75">≥75</option><option value="50">≥50</option></select></label>
       <button id="fClear">清空条件</button>
       <span class="fhint" id="fSaved" style="color:#9aa3b0">条件会自动记住</span>
@@ -986,9 +983,9 @@ function renderDay(){
       <div style="margin-top:6px"><b>大盘闸门</b>：上证指数同时站上 MA20、MA60 且 20 日动量为正 → 强（顺势）；同时跌破两线 → 弱（逆势，突破失败率显著上升）；其余 → 震荡。大盘状态决定当天这份名单该不该动手，不参与个股打分。</div>
       <div style="margin-top:6px"><b>板块趋势</b>：用成分股等权累乘出板块指数（≥5 只），四项各 25 分：站上 MA20、站上 MA60、20 日动量 >0、近 5 日主力资金净流入 >0；75 分以上为强、25 分以下为弱。资金一栏优先用东财真实主力净流入净占比（能按行业名对上 88/121 个板块），对不上的用代理口径（上涨日成交额记正、下跌日记负）。回测里板块评分 75（刚转强）最好（单笔 +2.10%），100 分反而只有 +1.05%，0 分（全面破位）20 日前瞻 -0.79%——所以板块只用来避雷，不用来追强。</div>
       <div style="margin-top:6px"><b>回踩</b>：突破后最低价回落触及突破位上方 2% 以内、但收盘不破位，即为回踩；此后收盘重新站上「突破日→回踩日」最高价为回踩确认。回踩量不足突破日成交量 1 倍算缩量回踩（质量最高）。</div>
-      <div style="margin-top:6px"><b>观察池</b>：从突破日当天就进池（只要突破日量比落在 1.5–2.0 倍），不用等 3 天。之后每天跟踪：第 3 个交易日收盘仍在突破位上方且距突破位 ≥3% → 自动进「全部通过」并参与精选；中间任一天收盘跌破突破位 → 标为已破位、出池。这样“刚突破”和“突破后第几天”在同一页都能看到。</div>
-      <div style="margin-top:6px"><b>排序分</b>：按 7 年回测的单笔期望赋分（大盘 强 +40 / 弱 +5 / 震荡 −20；板块 75 分 +25、100 分 +10；连续净流入 ≥3 日 +12、1–2 日 +6；站稳 6–8 天 +15、5 天 +10、3–4 天 +5；距突破位 &lt;5% +25、5–8% +12、8–12% 0、&gt;12% −25；量比 &lt;1.8 +10）。达标线 95 分，每日最多取前 3。回踩状态不进分——回测里“回踩确认后再买”单笔 −0.19%，反而不如信号日直接买，所以它只作为结构参考展示。</div>
-<div style="margin-top:6px"><b>持仓池</b>：从突破确认那天起按策略模拟——信号次日开盘买入（高开 &gt;9.5% 或低开 &gt;3% 放弃）、收盘从峰值回撤 25% 或满 120 个交易日次日开盘卖出，<b>最多同时持有 6 只</b>（满仓时新信号跳过，先入为主；同日多信号按代码顺序，不做行业互斥）。「当前持仓」表就是今天这 6 个仓位应该装的票；「待卖出」表示今日收盘已触发止盈/到期，明日开盘执行。<b>口径提醒</b>：这里只对齐 6 只上限与买卖规则，<b>不扣 0.4% 往返成本、不按 2% 风险预算定股数</b>，浮盈是信号跟踪口径，不能与回测净值或 README 收益直接对照。</div>
+      <div style="margin-top:6px"><b>观察池</b>：从突破日当天就进池（只要突破日量比落在 1.5–2.0 倍），不用等 3 天。之后每天跟踪：第 3 个交易日收盘仍在突破位上方且距突破位 ≥3% → 自动进「全部通过」并进入今日候选；中间任一天收盘跌破突破位 → 标为已破位、出池。这样“刚突破”和“突破后第几天”在同一页都能看到。</div>
+      <div style="margin-top:6px"><b>排序分</b>：v3 线性分，4 个因子（大盘强 +1 / 弱 −1、距突破位越近越好、站稳天数越多越好、量比 1.65–1.8 略优），系数只在 2020–2021 拟合后冻结。强市里按分数降序取前 3，与回测填仓顺序完全一致。板块评分与「连续净流入」已从排序分剔除——训练期最优但 2022 年后失效。回踩状态不进分，只作为结构参考展示。</div>
+<div style="margin-top:6px"><b>持仓池</b>：从突破确认那天起按策略模拟——信号次日开盘买入（高开 &gt;9.5% 或低开 &gt;3% 放弃）、收盘从峰值回撤 25% 或满 120 个交易日次日开盘卖出，<b>最多同时持有 10 只、仅强市开新仓</b>（同日多信号按 v3 排序分从高到低填仓，每日最多开 3 仓，仓位满则跳过，不做行业互斥）。「当前持仓」表就是今天这 10 个仓位应该装的票；「待卖出」表示今日收盘已触发止盈/到期，明日开盘执行。<b>口径提醒</b>：这里只对齐 10 仓上限与买卖规则，<b>不扣 0.4% 往返成本、不按 10% 等额定仓</b>，浮盈是信号跟踪口径，不能与回测净值或 README 收益直接对照（v3 全样本年化 3.32%、样本外 3.72%）。</div>
       <div style="margin-top:6px"><b>价格口径</b>：信号判定用后复权日线（除权不会制造假突破），表内展示的价格已按突破日比例折回不复权真实价位，可直接与行情软件对照。</div>
       <div style="margin-top:6px"><b>数据来源</b>：${D.source}　·　生成 ${D.generatedAt}</div>
     </div>

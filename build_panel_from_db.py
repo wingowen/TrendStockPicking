@@ -214,7 +214,7 @@ def regime_for(idx, date):
             "above_ma20": above20, "above_ma60": above60}
 
 
-PICK_MIN = 95   # 精选分数线：回测里 分≥95 且每日最多 3 只，单笔 +4.71%、胜率 44.9%
+PICK_MIN = None  # v3 不设分数下限：强市里按排序分取前 N，与引擎填仓顺序一致
 PICK_N = 3
 
 TRAIL = 0.25       # 移动止盈：收盘从持仓峰值回撤 25% → 次日开盘卖
@@ -222,16 +222,16 @@ MAX_HOLD = 120     # 最长持有交易日
 GAP_MAX = 0.095    # 信号次日开盘高开 >9.5% 放弃入场（涨停买不进）
 GAP_MIN = 0.03     # 信号次日开盘低开 >3% 放弃入场（隔夜情绪反转，回测：被拦单笔 -3.32%）
 CLOSED_WIN = 20    # 「近期平仓」回看窗口（交易日）
-POS_SLOTS = 6      # 持仓池上限：最多同时持有 6 只（与原基准 6 仓口径一致，不做行业互斥）
+POS_SLOTS = 10     # 持仓池上限：与 v3 冻结口径一致（10 仓、仅强市开仓、不做行业互斥）
 
 
-def simulate_positions(stocks, bars, raw, idx, targets):
-    """按策略模拟虚拟持仓池：最多同时持有 6 只（6 仓口径），不做资金分配。
+def simulate_positions(stocks, bars, raw, idx, targets, require_strong=True):
+    """按策略模拟虚拟持仓池：最多同时持有 POS_SLOTS 只（v3 为 10 仓）、仅强市开仓，不做资金分配。
 
     入场：某 breakout 首次满足全部确认条件（量比 1.5-2 / 站稳≥3 天 / 距突破位≥3%）
           的次日开盘买入；高开 >9.5% 或低开 >3% 放弃；同一 breakout 只做一次；
-          满 6 只时跳过新信号（先入为主，同日多信号按代码顺序）。
-          不做行业互斥——专项回测显示它会明显减分（6 仓 +46.24% → -8.00%）。
+          只在「强市」开仓（v3 硬闸门）；满 10 只时跳过新信号，同日多信号按 v3 排序分降序。
+          不做行业互斥（旧的互斥对比来自已作废口径，不再作为依据）。
     出场：收盘从持仓期间最高收盘回撤 25% → 次日开盘卖；或持有满 120 个交易日 → 次日开盘卖。
     收益用后复权价计算（除权不失真），展示价按最新复权系数折回。未扣双边约 0.4% 成本。
     """
@@ -304,13 +304,19 @@ def simulate_positions(stocks, bars, raw, idx, targets):
                 # 1e-9 容差：除以浮点收盘价后恰好 ±3%/9.5% 会漂移一个 ULP，
                 # 规则是「超过」才放弃，边界值应放行；与 run_backtest 同口径。
                 if -GAP_MIN - 1e-9 <= gap <= GAP_MAX + 1e-9:
+                    rl = reg_label(ds[k])
+                    if require_strong and rl != "强":     # v3 硬闸门：只在强市开仓
+                        continue
                     entries_by_date.setdefault(ds[k + 1], []).append(
                         (code, {"entry_k": k + 1, "signal_date": ds[k],
-                                "breakout": ds[bi], "level_adj": blv}))
+                                "breakout": ds[bi], "level_adj": blv,
+                                "_sc": v3_display(rl, close_raw / (blv * ratio) - 1,
+                                                  span, vr)}))
     for d in entries_by_date:
-        entries_by_date[d].sort(key=lambda x: x[0])   # 同日按代码顺序，避免未来函数
+        # 同日多信号按 v3 排序分降序（信号日可知信息，规则事前固定，无未来函数）
+        entries_by_date[d].sort(key=lambda x: (-x[1]["_sc"], x[0]))
 
-    # ---- 第二遍：按日历联合推进（6 仓上限）----
+    # ---- 第二遍：按日历联合推进（POS_SLOTS 上限，v3 = 10 仓）----
     active = {}          # code -> position state
     all_closed = []      # 已平仓交易
     # 必须从 HISTORY_START 起模拟（早于面板窗口的持仓也要在池子里）
@@ -418,22 +424,33 @@ def simulate_positions(stocks, bars, raw, idx, targets):
     return pos_by_date, closed_by_date
 
 
+# v3 冻结排序分：系数与 backtest/engine_v2.py 的 V3_MU / V3_SD / V3_W 完全一致，
+# 训练期 2020-01-01 ~ 2021-12-31 拟合后冻结。改这里必须同步改 engine_v2 并重跑 run_v3.py。
+V3_MU = (0.420605, 0.066976, 3.508365, 1.730955)     # 强1/弱-1, gain, days_above, vol_ratio
+V3_SD = (0.735744, 0.039762, 1.037386, 0.144746)
+V3_W = (0.012879, 0.001884, -0.005449, 0.001036, 0.002682)
+V3_RAW_MIN, V3_RAW_MAX = -0.0138, 0.0285             # 全集分数范围，仅用于映射到 0-130 展示刻度
+
+
+def v3_raw(reg_label, gain, days_above, vol_ratio):
+    """v3 排序分原值；只用信号当日可知信息，不含未来数据。"""
+    g = 1.0 if reg_label == "强" else (-1.0 if reg_label == "弱" else 0.0)
+    x = (g, min(max(gain or 0, 0.0), 0.20), min(max(days_above or 3, 3), 9), vol_ratio or 1.75)
+    z = [(v - m) / sd for v, m, sd in zip(x, V3_MU, V3_SD)]
+    return V3_W[0] + sum(w * zi for w, zi in zip(V3_W[1:], z))
+
+
+def v3_display(reg_label, gain, days_above, vol_ratio):
+    """映射到 0-130 展示刻度：单调变换，不改变排序，只是让旧分数线/筛选器继续可读。"""
+    v = v3_raw(reg_label, gain, days_above, vol_ratio)
+    return round((v - V3_RAW_MIN) / (V3_RAW_MAX - V3_RAW_MIN) * 130, 1)
+
+
 def rank_score(rec, sec, reg_label):
-    """排序分：权重按 7 年回测分层实测的单笔期望校准（只用信号当日可知信息）。
-    回踩状态不进分（回测里“回踩确认后入场”并不优于直接买，且会引入未来函数）。"""
-    s = 0.0
-    s += {"强": 40, "弱": 5}.get(reg_label or "", -20)   # 震荡 -20
-    ss = sec["score"] if sec else 0
-    s += {75: 25, 100: 10, 50: 5}.get(ss, 0)
-    c = (sec["consec"] if sec else 0) or 0
-    s += 12 if c >= 3 else (6 if c >= 1 else 0)
-    d = rec["days_above"]
-    s += 15 if 6 <= d <= 8 else (10 if d == 5 else 5)
-    g = (rec["gain"] or 0) / 100.0   # rec["gain"] 存的是百分数
-    s += 25 if g < 0.05 else (12 if g < 0.08 else (0 if g < 0.12 else -25))
-    v = rec["vol_ratio"] or 1.75
-    s += 10 if v < 1.8 else (6 if v >= 1.9 else 2)
-    return round(s, 1)
+    """排序分（v3）：强市、贴近突破位、站稳久、量比 1.65-1.8。
+    板块评分与板块连续流入已剔除（训练期最优、验证期不成立）。sec 参数保留只为兼容调用点。"""
+    gain = (rec["gain"] or 0) / 100.0     # rec["gain"] 存的是百分数
+    return v3_display(reg_label, gain, rec["days_above"], rec["vol_ratio"])
 
 
 def market_snapshot(stocks, bars, idx, date):
@@ -497,6 +514,7 @@ def build_day(date, stocks, bars, raw, idx, ind_series, real_flow=None, prev_cod
                           "flow5": round(sec["flow5"] * 100, 1),
                           "consec": sec["consec"]} if sec else None)
         rec["regime_ok"] = (reg["label"] != "弱") if reg else True
+        rec["regime_strong"] = (reg["label"] == "强") if reg else False
         if reasons:
             # 刚突破、量能达标、只是还没满 3 天 → 进观察池（不用等确认就能盯上）
             if rec["vol_ok"] and rec["days_above"] < HOLD_MIN:
@@ -519,9 +537,11 @@ def build_day(date, stocks, bars, raw, idx, ind_series, real_flow=None, prev_cod
         p["pick_rank"] = i if i <= PICK_N else 0
     watch.sort(key=lambda x: (-len(x["breakout_date"]), -x["days_above"], -x["rank_score"]))
     watch_new = sum(1 for w in watch if w["breakout_date"] == ymd(date))
-    picks = [p for p in passed[:PICK_N] if p["rank_score"] >= PICK_MIN]
-    picks_meta = {"threshold": PICK_MIN, "qualified": len(picks),
-                  "candidates": sum(1 for p in passed if p["rank_score"] >= PICK_MIN)}
+    # v3 规则：只在强市开仓；非强市一律降级为「只观察」
+    picks = [p for p in passed if p.get("regime_strong")][:PICK_N]
+    picks_meta = {"threshold": None, "qualified": len(picks),
+                  "candidates": sum(1 for p in passed if p.get("regime_strong")),
+                  "regime_strong": bool(reg and reg.get("label") == "强")}
     rejected.sort(key=lambda x: -(x["gain"] or 0))
     screened = len(passed) + len(rejected)
     evaluated = len(passed) + sum(1 for r in rejected
@@ -622,11 +642,11 @@ def main():
             "winners": sum(1 for p in ps if p["pnl"] > 0),
             "pending_exit": sum(1 for p in ps if p["exit_pending"]),
             "trail": TRAIL, "max_hold": MAX_HOLD, "since": HISTORY_START,
-            # 口径声明：6 只上限与回测一致，但不扣 0.4% 往返成本、不按 2% 风险预算定股数，
+            # 口径声明：10 仓上限与 v3 回测一致，但不扣 0.4% 往返成本、不按 10% 等额定股数，
             # 这里的 avg_pnl 是信号跟踪浮盈，不能与回测净值/README 收益直接对照。
-            "basis": "signal_tracking_no_cost_no_risk_sizing",
+            "basis": "signal_tracking_no_cost_no_equal_sizing",
             "cost_deducted": False, "risk_sized": False,
-            "note": "6 仓数量口径与回测一致；未扣 0.4% 往返成本，未做 2% 风险预算定仓，浮盈不等于回测净值",
+            "note": "10 仓数量口径与 v3 一致、仅强市开仓；未扣 0.4% 往返成本，未按 10% 等额定仓，浮盈不等于回测净值",
         }
         day["closed_recent"] = cl
         (OUT_DIR / f"{ymd(d)}.json").write_text(

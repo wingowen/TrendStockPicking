@@ -38,6 +38,8 @@ echo "${flow_cov:-[flow] 无覆盖率输出}"
 case "$flow_cov" in
   *"真实覆盖 0/"*) echo "=== 警告：板块资金流全缺，今日板块打分退回代理口径（名单可能与本地不同）";;
 esac
+# v3 净值曲线依赖因子缓存：先重建 features.csv，再导出，避免用陈旧/缺失缓存
+(cd backtest && "$PY" -u build_features.py)
 (cd backtest && "$PY" -u export_equity.py)
 echo "=== 构建完成 $(date '+%F %T')"
 

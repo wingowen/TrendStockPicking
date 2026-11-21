@@ -100,8 +100,9 @@ def _entry_on_signal(bars, idx, gap):
     signal_day, entry_day = 28, 29
     b["open"][entry_day] = b["close"][signal_day] * (1 + gap)
     stocks = {"T00001": {"name": "合成股", "industry": "合成行业", "market": "主板"}}
+    # gap 用例只测「是否放弃」，关掉强市闸门，避免合成指数（平盘 3000）被判成震荡
     pos, _closed = panel.simulate_positions(
-        stocks, {"T00001": b}, {}, idx, [b["dates"][entry_day]])
+        stocks, {"T00001": b}, {}, idx, [b["dates"][entry_day]], require_strong=False)
     return len(pos[b["dates"][entry_day]]) > 0
 
 
