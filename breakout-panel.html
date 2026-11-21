@@ -859,7 +859,7 @@ function renderDay(){
     </tr>`).join('');
   const posSection = `
     <div class="section-head" style="margin-top:4px"><h2>当前持仓（策略模拟池）</h2>
-      <span class="hint"><b id="pcount">${pmeta.count}</b> / ${pmeta.count} 只 · 平均浮盈 <b class="${pmeta.avg_pnl>=0?'pos':'neg'}">${pmeta.avg_pnl>0?'+':''}${pmeta.avg_pnl}%</b> · 盈利 ${pmeta.winners} 只 · <b style="color:var(--amber)">待卖出 ${pmeta.pending_exit} 只</b></span></div>
+      <span class="hint"><b id="pcount">${pmeta.count}</b> / ${pmeta.count} 只 · 平均浮盈 <b class="${pmeta.avg_pnl>=0?'pos':'neg'}">${pmeta.avg_pnl>0?'+':''}${pmeta.avg_pnl}%</b> · 盈利 ${pmeta.winners} 只 · <b style="color:var(--amber)">待卖出 ${pmeta.pending_exit} 只</b> · 信号跟踪口径（未扣成本）</span></div>
     <div class="filters" style="margin-bottom:8px">
       <label>搜索 <input id="pSearch" type="text" placeholder="代码 / 名称" style="border:none;background:transparent;font-size:12px;width:90px;font-family:inherit"></label>
       <label>状态 <select id="pState"><option value="">全部</option><option value="holding">持有中</option><option value="pending">待卖出</option></select></label>
@@ -988,7 +988,7 @@ function renderDay(){
       <div style="margin-top:6px"><b>回踩</b>：突破后最低价回落触及突破位上方 2% 以内、但收盘不破位，即为回踩；此后收盘重新站上「突破日→回踩日」最高价为回踩确认。回踩量不足突破日成交量 1 倍算缩量回踩（质量最高）。</div>
       <div style="margin-top:6px"><b>观察池</b>：从突破日当天就进池（只要突破日量比落在 1.5–2.0 倍），不用等 3 天。之后每天跟踪：第 3 个交易日收盘仍在突破位上方且距突破位 ≥3% → 自动进「全部通过」并参与精选；中间任一天收盘跌破突破位 → 标为已破位、出池。这样“刚突破”和“突破后第几天”在同一页都能看到。</div>
       <div style="margin-top:6px"><b>排序分</b>：按 7 年回测的单笔期望赋分（大盘 强 +40 / 弱 +5 / 震荡 −20；板块 75 分 +25、100 分 +10；连续净流入 ≥3 日 +12、1–2 日 +6；站稳 6–8 天 +15、5 天 +10、3–4 天 +5；距突破位 &lt;5% +25、5–8% +12、8–12% 0、&gt;12% −25；量比 &lt;1.8 +10）。达标线 95 分，每日最多取前 3。回踩状态不进分——回测里“回踩确认后再买”单笔 −0.19%，反而不如信号日直接买，所以它只作为结构参考展示。</div>
-<div style="margin-top:6px"><b>持仓池</b>：从突破确认那天起按策略模拟——信号次日开盘买入（高开 &gt;9.5% 或低开 &gt;3% 放弃）、收盘从峰值回撤 25% 或满 120 个交易日次日开盘卖出，<b>最多同时持有 6 只</b>（满仓时新信号跳过，先入为主；同日多信号按代码顺序，不做行业互斥）。「当前持仓」表就是今天这 6 个仓位应该装的票；「待卖出」表示今日收盘已触发止盈/到期，明日开盘执行。6 仓口径与回测基准一致（2020–2026 含低开过滤：累计 +48.3%、年化约 5.9%、最大回撤 −18.6%）。</div>
+<div style="margin-top:6px"><b>持仓池</b>：从突破确认那天起按策略模拟——信号次日开盘买入（高开 &gt;9.5% 或低开 &gt;3% 放弃）、收盘从峰值回撤 25% 或满 120 个交易日次日开盘卖出，<b>最多同时持有 6 只</b>（满仓时新信号跳过，先入为主；同日多信号按代码顺序，不做行业互斥）。「当前持仓」表就是今天这 6 个仓位应该装的票；「待卖出」表示今日收盘已触发止盈/到期，明日开盘执行。<b>口径提醒</b>：这里只对齐 6 只上限与买卖规则，<b>不扣 0.4% 往返成本、不按 2% 风险预算定股数</b>，浮盈是信号跟踪口径，不能与回测净值或 README 收益直接对照。</div>
       <div style="margin-top:6px"><b>价格口径</b>：信号判定用后复权日线（除权不会制造假突破），表内展示的价格已按突破日比例折回不复权真实价位，可直接与行情软件对照。</div>
       <div style="margin-top:6px"><b>数据来源</b>：${D.source}　·　生成 ${D.generatedAt}</div>
     </div>

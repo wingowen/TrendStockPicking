@@ -12,6 +12,12 @@ import os
 import sqlite3
 import subprocess
 import threading
+import time
+
+# 收盘守卫必须用北京时间；不依赖启动者的 shell 时区
+os.environ.setdefault("TZ", "Asia/Shanghai")
+if hasattr(time, "tzset"):
+    time.tzset()
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 PORT = 8765

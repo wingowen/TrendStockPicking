@@ -161,7 +161,10 @@ def simulate_trade(bars, sig, cfg):
     e = k + 1
     entry_open = bars["o"][e]
     gap = entry_open / bars["c"][k] - 1
-    if entry_open <= 0 or gap > cfg["gap_max"] or gap < -cfg.get("gap_min", 0):
+    # 1e-9 容差：gap=开盘/昨收-1 的浮点除法会让恰好 ±3%/9.5% 漂移一个 ULP；
+    # 规则是「超过」才放弃，边界值应放行；与 build_panel_from_db 同口径。
+    if (entry_open <= 0 or gap > cfg["gap_max"] + 1e-9
+            or gap < -cfg.get("gap_min", 0) - 1e-9):
         return None   # 大幅高开买不进 / 大幅低开不接
 
     level = sig["level"]

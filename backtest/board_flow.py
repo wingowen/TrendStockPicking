@@ -6,11 +6,29 @@
 """
 import json
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 CACHE = ROOT / "fflow_cache.json"
+# 缓存最大有效天数：board_flow 数据按交易日变化，隔日必须重抓。
+# 每日脚本 server_daily.sh 会直接删缓存；这里再加 TTL 兜底，防止漏清理。
+CACHE_MAX_AGE_DAYS = 1
 HDR = {"User-Agent": "Mozilla/5.0", "Referer": "https://quote.eastmoney.com/"}
+
+
+def _cache_fresh(cache, max_age_days):
+    """判断缓存是否仍在有效期内（generated_at 为 UTC ISO-8601 字符串）。"""
+    ts = cache.get("generated_at")
+    if not ts:
+        return False
+    try:
+        t = datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return False
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - t <= timedelta(days=max_age_days)
 
 
 def _get(u):
@@ -53,13 +71,17 @@ def board_flow(bk):
     return out
 
 
-def load_real_flow(industries, use_cache=True):
-    """返回 {行业名: {日期: 净占比}}，只含能按名匹配到东财板块的行业"""
+def load_real_flow(industries, use_cache=True, max_age_days=CACHE_MAX_AGE_DAYS):
+    """返回 {行业名: {日期: 净占比}}，只含能按名匹配到东财板块的行业。
+
+    max_age_days: 缓存有效期（天），0 表示强制忽略缓存重抓。
+    """
     industries = {norm(i) for i in industries if i}
     if use_cache and CACHE.exists():
         try:
             c = json.loads(CACHE.read_text(encoding="utf-8"))
-            if set(c.get("want", [])) >= industries:
+            if (set(c.get("want", [])) >= industries
+                    and _cache_fresh(c, max_age_days)):
                 return c["flow"]
         except Exception:
             pass
@@ -73,6 +95,9 @@ def load_real_flow(industries, use_cache=True):
             flow[name] = board_flow(bk)
         except Exception:
             continue
-    CACHE.write_text(json.dumps({"want": sorted(industries), "flow": flow},
-                                ensure_ascii=False), encoding="utf-8")
+    CACHE.write_text(json.dumps({
+        "want": sorted(industries),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "flow": flow,
+    }, ensure_ascii=False), encoding="utf-8")
     return flow

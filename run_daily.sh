@@ -3,7 +3,11 @@
 # 建议 15:35 之后运行：./run_daily.sh
 set -e
 cd "$(dirname "$0")"
+export TZ=Asia/Shanghai
 PY="$PWD/.venv-bt/bin/python"
+
+echo "[0/3] 回归测试（27 例，失败则阻断构建）"
+"$PY" -m pytest tests/test_strategy.py -q
 
 echo "[1/3] 抓取日线（后复权）"
 (cd backtest && "$PY" fetch_data.py --force)

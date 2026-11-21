@@ -33,7 +33,9 @@ VOL_MIN, VOL_MAX = 1.5, 2.0
 HOLD_MIN = 3
 GAIN_MIN = 0.03
 SERIES_BARS = 60
-HISTORY_START = "2025-01-01"
+# 面板只展示最近 N 天，但信号判定需要暖机：evaluate 要求下标 >= LOOKBACK+BREAK_WIN+5=33。
+# 起点太晚会让 2025 年初的信号被误判为空（回测从 2018 起有暖机），故往前多留约 60 个交易日。
+HISTORY_START = "2024-10-01"
 
 
 def load(con):
@@ -80,6 +82,21 @@ def ymd(d):
     return d.replace("-", "")
 
 
+def prev_below(c, t, L):
+    """前一日是否尚未站上「它自己的」前 L 日最高收盘。
+
+    对齐 backtest/run_backtest.py:find_signals 的 prev_level 语义：
+      level      = max(c[t-L:t])        # 突破位，不含当日 t
+      prev_level = max(c[t-L-1:t-1])    # 前一日的突破位，不含 t-1
+    旧写法 c[t-1] <= max(c[t-L:t]) 恒真（窗口含 t-1），会把单边上涨中的每一天
+    都当成「首次突破」。t==L 时历史不足一个 prev 窗口，按首次突破处理。
+    c: 后复权收盘序列；t: 当前 bar 下标；L: LOOKBACK 天数。
+    """
+    if t <= L:
+        return True
+    return c[t - 1] <= max(c[t - L - 1:t - 1])
+
+
 def evaluate(b, k, raw_map):
     """对个股在 k 位置（bar 下标）判定状态；返回 (record, reasons) 或 None。"""
     c, v, dates = b["close"], b["vol"], b["dates"]
@@ -89,12 +106,21 @@ def evaluate(b, k, raw_map):
     # 找「首个仍然有效」的突破：收盘站上前 LOOKBACK 日最高收盘、前一日还在该位置下方，
     # 且从突破日到今天一直没跌回突破位下方。取最早的那个，站稳天数才不会被后续新高重置
     i = level = None
+    fallback = None  # 最早但量比不合格的突破：仅用于展示「为什么不选它」
     start = max(LOOKBACK, k - BREAK_WIN + 1)
     for t in range(start, k + 1):
         lv = max(c[t - LOOKBACK:t])
-        if c[t] > lv and c[t - 1] <= lv and all(x > lv for x in c[t:k + 1]):
+        if not (c[t] > lv and prev_below(c, t, LOOKBACK)
+                and all(x > lv for x in c[t:k + 1])):
+            continue
+        vr_t = v[t] / (sum(v[t - 5:t]) / 5) if t >= 5 and sum(v[t - 5:t]) > 0 else None
+        if vr_t is not None and VOL_MIN <= vr_t <= VOL_MAX:
             i, level = t, lv
             break
+        if fallback is None:
+            fallback = (t, lv)
+    if i is None and fallback is not None:
+        i, level = fallback
     if i is None:
         return None
 
@@ -259,7 +285,7 @@ def simulate_positions(stocks, bars, raw, idx, targets):
                 bi = None
             if bi is None and k >= LOOKBACK:
                 lv = max(c[k - LOOKBACK:k])
-                if c[k] > lv and c[k - 1] <= lv:
+                if c[k] > lv and prev_below(c, k, LOOKBACK):
                     vr = v[k] / (sum(v[k - 5:k]) / 5) if k >= 5 and sum(v[k - 5:k]) > 0 else None
                     if vr is not None and VOL_MIN <= vr <= VOL_MAX:
                         bi, blv = k, lv
@@ -275,7 +301,9 @@ def simulate_positions(stocks, bars, raw, idx, targets):
             last_signaled = ds[bi]
             if k + 1 < n:
                 gap = o[k + 1] / c[k] - 1
-                if -GAP_MIN <= gap <= GAP_MAX:
+                # 1e-9 容差：除以浮点收盘价后恰好 ±3%/9.5% 会漂移一个 ULP，
+                # 规则是「超过」才放弃，边界值应放行；与 run_backtest 同口径。
+                if -GAP_MIN - 1e-9 <= gap <= GAP_MAX + 1e-9:
                     entries_by_date.setdefault(ds[k + 1], []).append(
                         (code, {"entry_k": k + 1, "signal_date": ds[k],
                                 "breakout": ds[bi], "level_adj": blv}))
@@ -563,7 +591,8 @@ def main():
         targets = [d for d in targets if d != today]
         print(f"{today} 尚未收盘，跳过当日快照")
 
-    OUT_DIR.mkdir(exist_ok=True)
+    if not OUT_DIR.exists():
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
     days = {}
     prev_codes, new_codes = None, set()
     for date in targets:
@@ -593,6 +622,11 @@ def main():
             "winners": sum(1 for p in ps if p["pnl"] > 0),
             "pending_exit": sum(1 for p in ps if p["exit_pending"]),
             "trail": TRAIL, "max_hold": MAX_HOLD, "since": HISTORY_START,
+            # 口径声明：6 只上限与回测一致，但不扣 0.4% 往返成本、不按 2% 风险预算定股数，
+            # 这里的 avg_pnl 是信号跟踪浮盈，不能与回测净值/README 收益直接对照。
+            "basis": "signal_tracking_no_cost_no_risk_sizing",
+            "cost_deducted": False, "risk_sized": False,
+            "note": "6 仓数量口径与回测一致；未扣 0.4% 往返成本，未做 2% 风险预算定仓，浮盈不等于回测净值",
         }
         day["closed_recent"] = cl
         (OUT_DIR / f"{ymd(d)}.json").write_text(

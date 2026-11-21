@@ -1,4 +1,5 @@
 # 本地运行产物：CI 每次从零重建，不进仓库
+backtest/fflow_cache.json
 backtest/market.db
 backtest/market.db-journal
 breakout-data/

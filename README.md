@@ -38,14 +38,19 @@ GitHub Actions 每交易日 15:20（北京时间）自动重建：
 ## 本地跑
 
 ```bash
-./run_daily.sh                     # 15:35 后：全量抓数 + 重建面板
+.venv-bt/bin/python -m pytest tests/test_strategy.py -q  # 回归测试（27 例，构建前门禁）
+./run_daily.sh                     # 15:35 后：回归测试 + 全量抓数 + 重建面板
 python3 build_panel_from_db.py --days 30 --intraday   # 盘中预览
 python3 backtest/export_equity.py  # 重算规则页净值/回撤
 ```
 
-## CI
+WSL 每日脚本用的是独立 `.venv`，启用同样门禁前需先 `.venv/bin/pip install pytest`。
 
-`.github/workflows/daily.yml`：cron `20 7 * * 1-5`，runner 每次从零全量抓取（不缓存 db），产物部署到 Pages。手动触发用 `workflow_dispatch`。
+## 数据与部署
+
+抓数和构建跑在国内网络的 WSL 机器上：`server_daily.sh` 每日全量重抓东财 → 写本地 SQLite → 生成面板与净值 JS → force-push 到 `data` 分支。`.github/workflows/deploy.yml` 在收到 `data` 分支推送后只做静态打包与 Pages 部署，不抓数据（海外 IP 拿不到东财）。手动重新部署用 `workflow_dispatch`。
+
+`ci_build.sh` 是早期 CI 方案，现已无人调用，保留仅作参考。
 
 ## 免责
 

@@ -28,8 +28,9 @@ until (cd backtest && "$PY" -u fetch_data.py --force); do
 done
 (cd backtest && "$PY" -u fetch_extra.py)
 
-# 板块主力净流入按天变化，缓存命中会一直用旧数据，这里每天清一次强制重抓
-rm -f fflow_cache.json
+# 板块主力净流入按天变化：清掉真实缓存强制重抓（路径与 board_flow.CACHE 一致），
+# board_flow.load_real_flow 内部另有 1 天 TTL 兜底，防止漏清理时继续用旧数据
+rm -f "$PWD/backtest/fflow_cache.json"
 "$PY" -u build_panel_from_db.py --days 30
 
 flow_cov=$(grep "真实覆盖" "$LOG" | tail -1 || true)
