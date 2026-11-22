@@ -504,9 +504,31 @@ let SORT = {key:null, dir:-1};
 function loadFilters(){ try{ return JSON.parse(localStorage.getItem(LIVE_KEY)||'{}')||{}; }catch(e){ return {}; } }
 function saveFilters(o){ try{ localStorage.setItem(LIVE_KEY, JSON.stringify(o)); }catch(e){} }
 
+// A 股 2026 法定休市日（离线兜底；权威交易日以快照 CAL 日历为准）
+const HOLIDAYS_2026 = new Set([
+  '2026-01-01','2026-01-02','2026-01-03',
+  '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
+  '2026-04-04','2026-04-05','2026-04-06',
+  '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
+  '2026-06-19','2026-06-20','2026-06-21',
+  '2026-09-25','2026-09-26','2026-09-27',
+  '2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06','2026-10-07'
+]);
+function _dnum(d){ return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`; }
+function _dstr(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+// 今天是否为 A 股交易日：优先用快照日历（后端按实际行情库生成），取不到再用周末 + 节假日表兜底
+function isMarketDay(d){
+  d = d || new Date();
+  if(CAL && CAL.length) return CAL.includes(_dnum(d));
+  const w = d.getDay();
+  if(w===0 || w===6) return false;
+  return !HOLIDAYS_2026.has(_dstr(d));
+}
 function isTrading(){
-  const d = new Date(), w = d.getDay(), hm = d.getHours()*60 + d.getMinutes();
-  if(w<1 || w>5) return false;
+  const d = new Date();
+  if(!isMarketDay(d)) return false;
+  const hm = d.getHours()*60 + d.getMinutes();
   return (hm>=570 && hm<=690) || (hm>=780 && hm<=900);
 }
 function secidOf(code){ return (code.charAt(0)==='6' ? '1.' : '0.') + code; }
@@ -527,6 +549,10 @@ function refreshLive(){
     .filter(n => n.offsetParent !== null);
   const stamp = document.getElementById('liveStamp');
   if(!nodes.length) return;
+  if(!isMarketDay()){
+    if(stamp) stamp.textContent = '非交易日（显示最近收盘）';
+    return;
+  }
   const codes = [...new Set(nodes.map(n=>n.dataset.code))];
   const batches = [];
   for(let i=0;i<codes.length;i+=60) batches.push(codes.slice(i,i+60));
@@ -555,8 +581,15 @@ function refreshLive(){
       }
       if(doneCount === batches.length && stamp){
         const t = new Date().toTimeString().slice(0,5);
-        stamp.textContent = okCount===0 ? '实时价拉取失败（需联网）'
-          : (isTrading() ? `实时价 ${t} · 30 秒自动刷新` : `实时价 ${t} · 非交易时段（显示最新收盘）`);
+        if(okCount===0){
+          stamp.textContent = '实时价拉取失败（需联网）';
+        } else if(isTrading()){
+          stamp.textContent = `实时价 ${t} · 30 秒自动刷新`;
+        } else if(isMarketDay()){
+          stamp.textContent = `实时价 ${t} · 非交易时段（显示最新收盘）`;
+        } else {
+          stamp.textContent = `实时价 ${t} · 非交易日（显示最近收盘）`;
+        }
       }
     });
   });
